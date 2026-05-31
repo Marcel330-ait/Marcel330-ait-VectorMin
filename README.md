@@ -4,6 +4,11 @@ VectorMint is a browser-only bitmap to SVG tracer for logos, icons, stickers, fl
 
 VectorMint 是一个纯浏览器运行的位图转 SVG 工具，适合 logo、图标、贴纸、扁平插画和黑白线稿。
 
+
+<img width="1090" height="730" alt="image" src="https://github.com/user-attachments/assets/29ae9a24-29aa-4e27-b3ed-533ca6164d89" />
+
+
+
 ## Features / 功能
 
 - Runs fully in the browser with no upload step.
