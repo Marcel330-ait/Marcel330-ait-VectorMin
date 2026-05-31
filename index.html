@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VectorMint - Bitmap to SVG</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="VectorMint workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">VectorMint</p>
+            <h1>位图转可编辑 SVG / Bitmap to editable SVG</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="sampleButton" type="button" title="Load sample">
+              <span aria-hidden="true">◐</span>
+              <span>示例 Sample</span>
+            </button>
+            <button class="primary-button" id="downloadButton" type="button" disabled>
+              <span aria-hidden="true">↓</span>
+              <span>下载 SVG Download</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="tool-grid">
+          <aside class="panel controls" aria-label="Settings">
+            <label class="upload-zone" id="dropZone">
+              <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" />
+              <span class="upload-icon" aria-hidden="true">+</span>
+              <span class="upload-title">拖入图片或点击上传 / Drop or upload</span>
+              <span class="upload-copy">PNG、JPG、WebP，本地处理，不上传 / Local only, no upload</span>
+            </label>
+
+            <div class="control-group">
+              <label for="modeSelect">模式 / Mode</label>
+              <select id="modeSelect">
+                <option value="logo">Logo / 图标 Icon</option>
+                <option value="color">彩色块面 / Color blocks</option>
+                <option value="mono">黑白线稿 / Monochrome</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="presetSelect">质量 / Quality</label>
+              <select id="presetSelect">
+                <option value="balanced">标准 / Balanced</option>
+                <option value="fast">快速 / Fast</option>
+                <option value="high">高清 / High</option>
+                <option value="ultra">超清但慢 / Ultra, slower</option>
+                <option value="custom">自定义 / Custom</option>
+              </select>
+            </div>
+
+            <div class="control-row">
+              <label for="colorsRange">颜色数量 / Colors <output id="colorsOutput">6</output></label>
+              <input id="colorsRange" type="range" min="2" max="14" value="6" />
+            </div>
+
+            <div class="control-row">
+              <label for="detailRange">细节 / Detail <output id="detailOutput">640</output></label>
+              <input id="detailRange" type="range" min="240" max="1200" step="40" value="640" />
+            </div>
+
+            <div class="control-row">
+              <label for="smoothRange">平滑 / Smooth <output id="smoothOutput">0.8</output></label>
+              <input id="smoothRange" type="range" min="0" max="3" step="0.2" value="0.8" />
+            </div>
+
+            <div class="control-row">
+              <label for="denoiseRange">去噪 / Denoise <output id="denoiseOutput">8</output></label>
+              <input id="denoiseRange" type="range" min="0" max="80" step="2" value="8" />
+            </div>
+
+            <label class="switch-row">
+              <input id="backgroundToggle" type="checkbox" checked />
+              <span>移除边缘背景色 / Remove edge background</span>
+            </label>
+
+            <label class="switch-row">
+              <input id="curveToggle" type="checkbox" checked />
+              <span>曲线拟合 / Curve fitting</span>
+            </label>
+
+            <div class="stats" aria-live="polite">
+              <div>
+                <span>状态 / Status</span>
+                <strong id="statusText">等待图片 / Waiting</strong>
+              </div>
+              <div>
+                <span>路径 / Paths</span>
+                <strong id="pathCount">0</strong>
+              </div>
+              <div>
+                <span>体积 / Size</span>
+                <strong id="svgSize">0 KB</strong>
+              </div>
+            </div>
+
+            <p class="limit-note">保护限制 / Safety limit: 最大 750MB 文件或 8000 万像素。Images over 750MB or 80MP should be resized first.</p>
+          </aside>
+
+          <section class="preview-stage" aria-label="Previews">
+            <div class="preview-card">
+              <div class="preview-head">
+                <h2>原图 / Source</h2>
+                <span id="sourceMeta">未选择 / None</span>
+              </div>
+              <canvas id="sourceCanvas" width="800" height="520" aria-label="Source image preview"></canvas>
+            </div>
+
+            <div class="preview-card">
+              <div class="preview-head">
+                <h2>SVG</h2>
+                <button class="text-button" id="copyButton" type="button" disabled>复制代码 Copy</button>
+              </div>
+              <div class="svg-preview" id="svgPreview">
+                <div class="empty-state">
+                  <strong>把位图变成路径 / Turn bitmap into paths</strong>
+                  <span>上传图片后会在这里生成可下载的 SVG。Upload an image to generate an SVG.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <footer class="site-footer">made by Marcel330-ait</footer>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
