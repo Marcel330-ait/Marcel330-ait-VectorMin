@@ -51,18 +51,28 @@
                 <option value="fast">快速 / Fast</option>
                 <option value="high">高清 / High</option>
                 <option value="ultra">超清但慢 / Ultra, slower</option>
+                <option value="fidelity">保真 / Fidelity, largest</option>
                 <option value="custom">自定义 / Custom</option>
               </select>
             </div>
 
             <div class="control-row">
               <label for="colorsRange">颜色数量 / Colors <output id="colorsOutput">6</output></label>
-              <input id="colorsRange" type="range" min="2" max="14" value="6" />
+              <input id="colorsRange" type="range" min="2" max="32" value="6" />
+            </div>
+
+            <div class="control-group">
+              <label for="edgeSelect">边缘辅助 / Edge assist</label>
+              <select id="edgeSelect">
+                <option value="none">关闭 / Off</option>
+                <option value="sobel">Sobel 轮廓 / Sobel contours</option>
+                <option value="canny">Canny-lite 清晰边缘 / Canny-lite edges</option>
+              </select>
             </div>
 
             <div class="control-row">
               <label for="detailRange">细节 / Detail <output id="detailOutput">640</output></label>
-              <input id="detailRange" type="range" min="240" max="1200" step="40" value="640" />
+              <input id="detailRange" type="range" min="240" max="1600" step="40" value="640" />
             </div>
 
             <div class="control-row">

@@ -12,10 +12,11 @@ const state = {
 };
 
 const PRESETS = {
-  fast: { colors: 5, detail: 400, smooth: 1, denoise: 16, curves: true },
-  balanced: { colors: 6, detail: 640, smooth: 0.8, denoise: 8, curves: true },
-  high: { colors: 8, detail: 920, smooth: 0.6, denoise: 4, curves: true },
-  ultra: { colors: 10, detail: 1200, smooth: 0.4, denoise: 2, curves: true },
+  fast: { colors: 5, detail: 400, smooth: 1, denoise: 16, curves: true, edge: "none" },
+  balanced: { colors: 6, detail: 640, smooth: 0.8, denoise: 8, curves: true, edge: "none" },
+  high: { colors: 10, detail: 920, smooth: 0.6, denoise: 4, curves: true, edge: "sobel" },
+  ultra: { colors: 14, detail: 1200, smooth: 0.4, denoise: 2, curves: true, edge: "sobel" },
+  fidelity: { colors: 24, detail: 1400, smooth: 0.2, denoise: 0, curves: true, edge: "canny" },
 };
 
 const LIMITS = {
@@ -37,6 +38,7 @@ const elements = {
   sampleButton: $("sampleButton"),
   modeSelect: $("modeSelect"),
   presetSelect: $("presetSelect"),
+  edgeSelect: $("edgeSelect"),
   colorsRange: $("colorsRange"),
   detailRange: $("detailRange"),
   smoothRange: $("smoothRange"),
@@ -55,6 +57,7 @@ function syncOutputs() {
   elements.smoothOutput.value = Number(elements.smoothRange.value).toFixed(1);
   elements.denoiseOutput.value = elements.denoiseRange.value;
   elements.colorsRange.disabled = elements.modeSelect.value === "mono";
+  elements.edgeSelect.disabled = elements.modeSelect.value === "mono";
 }
 
 function setStatus(text) {
@@ -88,6 +91,7 @@ function applyPreset(name) {
   elements.smoothRange.value = preset.smooth;
   elements.denoiseRange.value = preset.denoise;
   elements.curveToggle.checked = preset.curves;
+  elements.edgeSelect.value = preset.edge;
   state.applyingPreset = false;
   scheduleVectorize();
 }
@@ -368,6 +372,7 @@ function readSettings() {
     denoise: Number(elements.denoiseRange.value),
     removeBackground: elements.backgroundToggle.checked,
     curves: elements.curveToggle.checked,
+    edgeAssist: elements.edgeSelect.value,
   };
 }
 
@@ -394,7 +399,14 @@ function vectorizeImage(settings) {
     return vectorizeMono(pixels, width, height, settings);
   }
 
-  const palette = quantize(pixels, width, height, settings.mode === "logo" ? Math.min(settings.colors, 8) : settings.colors);
+  const edgeMask = settings.edgeAssist === "none" ? null : createEdgeMask(pixels, width, height, settings.edgeAssist);
+  const palette = quantize(
+    pixels,
+    width,
+    height,
+    settings.mode === "logo" ? Math.min(settings.colors, 12) : settings.colors,
+    edgeMask,
+  );
   const assignments = assignPalette(pixels, palette, settings.mode);
   const backgroundIndex = settings.removeBackground ? findBackgroundIndex(assignments, width, height) : -1;
   const layers = palette
@@ -411,7 +423,7 @@ function vectorizeImage(settings) {
     for (let i = 0; i < assignments.length; i++) {
       if (assignments[i] === layer.index && pixels[i * 4 + 3] > 18) mask[i] = 1;
     }
-    const cleaned = filterComponents(mask, width, height, minArea);
+    const cleaned = filterComponents(mask, width, height, minArea, edgeMask);
     const paths = traceMask(cleaned, width, height, settings.smoothness, settings.curves);
     if (!paths.length) continue;
     body += `<path fill="${rgbToHex(layer.color)}" fill-rule="evenodd" d="${paths.join(" ")}"/>`;
@@ -423,6 +435,7 @@ function vectorizeImage(settings) {
 
 function vectorizeMono(pixels, width, height, settings) {
   const mask = new Uint8Array(width * height);
+  const edgeMask = createEdgeMask(pixels, width, height, "canny");
   let sum = 0;
   let count = 0;
 
@@ -436,10 +449,10 @@ function vectorizeMono(pixels, width, height, settings) {
   const threshold = count ? sum / count : 128;
   for (let i = 0; i < width * height; i++) {
     const lum = 0.2126 * pixels[i * 4] + 0.7152 * pixels[i * 4 + 1] + 0.0722 * pixels[i * 4 + 2];
-    mask[i] = pixels[i * 4 + 3] > 18 && lum < threshold ? 1 : 0;
+    mask[i] = pixels[i * 4 + 3] > 18 && (lum < threshold || edgeMask[i]) ? 1 : 0;
   }
 
-  const cleaned = filterComponents(mask, width, height, Math.max(1, settings.denoise));
+  const cleaned = filterComponents(mask, width, height, Math.max(1, settings.denoise), edgeMask);
   const paths = traceMask(cleaned, width, height, settings.smoothness, settings.curves);
   const body = paths.length ? `<path fill="#1c2321" fill-rule="evenodd" d="${paths.join(" ")}"/>` : "";
   return buildSvg(body, width, height, paths.length);
@@ -450,13 +463,24 @@ function buildSvg(body, width, height, pathCount) {
   return { svg, paths: pathCount };
 }
 
-function quantize(pixels, width, height, k) {
+function quantize(pixels, width, height, k, edgeMask) {
   const samples = [];
-  const step = Math.max(1, Math.floor(Math.sqrt((width * height) / 24000)));
+  const sampleBudget = Math.max(24000, k * 7000);
+  const step = Math.max(1, Math.floor(Math.sqrt((width * height) / sampleBudget)));
   for (let y = 0; y < height; y += step) {
     for (let x = 0; x < width; x += step) {
       const i = (y * width + x) * 4;
       if (pixels[i + 3] > 18) samples.push([pixels[i], pixels[i + 1], pixels[i + 2]]);
+    }
+  }
+  if (edgeMask) {
+    const edgeStep = Math.max(1, Math.floor(step / 2));
+    for (let y = 0; y < height; y += edgeStep) {
+      for (let x = 0; x < width; x += edgeStep) {
+        const index = y * width + x;
+        const i = index * 4;
+        if (edgeMask[index] && pixels[i + 3] > 18) samples.push([pixels[i], pixels[i + 1], pixels[i + 2]]);
+      }
     }
   }
   if (!samples.length) return [[28, 35, 33]];
@@ -557,7 +581,7 @@ function findBackgroundIndex(assignments, width, height) {
   return best;
 }
 
-function filterComponents(mask, width, height, minArea) {
+function filterComponents(mask, width, height, minArea, protectedMask) {
   if (minArea <= 1) return mask;
   const result = new Uint8Array(mask.length);
   const seen = new Uint8Array(mask.length);
@@ -590,11 +614,89 @@ function filterComponents(mask, width, height, minArea) {
       }
     }
 
-    if (component.length >= minArea) {
+    const hasProtectedPixel = protectedMask && component.some((index) => protectedMask[index]);
+    if (component.length >= minArea || hasProtectedPixel) {
       for (const index of component) result[index] = 1;
     }
   }
 
+  return result;
+}
+
+function createEdgeMask(pixels, width, height, mode) {
+  const gray = new Float32Array(width * height);
+  for (let i = 0; i < gray.length; i++) {
+    const offset = i * 4;
+    gray[i] = pixels[offset + 3] < 18 ? 255 : 0.2126 * pixels[offset] + 0.7152 * pixels[offset + 1] + 0.0722 * pixels[offset + 2];
+  }
+
+  const magnitude = new Float32Array(width * height);
+  const values = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      const gx =
+        -gray[i - width - 1] +
+        gray[i - width + 1] -
+        2 * gray[i - 1] +
+        2 * gray[i + 1] -
+        gray[i + width - 1] +
+        gray[i + width + 1];
+      const gy =
+        -gray[i - width - 1] -
+        2 * gray[i - width] -
+        gray[i - width + 1] +
+        gray[i + width - 1] +
+        2 * gray[i + width] +
+        gray[i + width + 1];
+      const value = Math.hypot(gx, gy);
+      magnitude[i] = value;
+      values.push(value);
+    }
+  }
+
+  values.sort((a, b) => a - b);
+  const percentile = mode === "canny" ? 0.82 : 0.88;
+  const threshold = values[Math.floor(values.length * percentile)] || 80;
+  const edges = new Uint8Array(width * height);
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      if (magnitude[i] < threshold) continue;
+      if (mode === "canny" && !isLocalEdgeMaximum(magnitude, width, i)) continue;
+      edges[i] = 1;
+    }
+  }
+
+  return mode === "canny" ? dilateMask(edges, width, height, 1) : edges;
+}
+
+function isLocalEdgeMaximum(magnitude, width, index) {
+  const value = magnitude[index];
+  return (
+    value >= magnitude[index - 1] &&
+    value >= magnitude[index + 1] &&
+    value >= magnitude[index - width] &&
+    value >= magnitude[index + width]
+  );
+}
+
+function dilateMask(mask, width, height, radius) {
+  const result = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (!mask[index]) continue;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height) result[ny * width + nx] = 1;
+        }
+      }
+    }
+  }
   return result;
 }
 
@@ -833,6 +935,7 @@ elements.presetSelect.addEventListener("input", (event) => applyPreset(event.tar
 for (const control of [
   elements.modeSelect,
   elements.colorsRange,
+  elements.edgeSelect,
   elements.detailRange,
   elements.smoothRange,
   elements.denoiseRange,
